@@ -1,0 +1,3 @@
+SUBDIRS = packages
+
+ACLOCAL_AMFLAGS = -I m4
