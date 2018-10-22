@@ -1,3 +1,3 @@
-SUBDIRS = packages
+SUBDIRS = packages lib
 
 ACLOCAL_AMFLAGS = -I m4

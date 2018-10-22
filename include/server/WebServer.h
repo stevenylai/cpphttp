@@ -4,33 +4,40 @@
 #include "server/HTTPHandler.h"
 
 namespace http {
-  struct WebServerSettings
-  {
-    int Port = 0;
-    std::string StaticFilePath;
-    std::string DefaultFile = "index.htm";
-    std::string DynamicURL = "/backend";
-  };
 
-  struct URLHandler
-  {
-    std::regex Pattern;
-    std::unique_ptr<HTTPHandler> HandlerMatcher;
-  };
+struct WebServerSettings
+{
+  int Port = 0;
+  std::string StaticFilePath;
+  std::string DefaultFile = "index.htm";
+  std::string DynamicURL = "/backend";
+};
 
-  struct WebServerImpl;
-
-  class WebServer
+struct URLHandler
+{
+  std::regex Pattern;
+  std::unique_ptr<HTTPHandler> Handler;
+  URLHandler(const std::string &pattern, std::unique_ptr<HTTPHandler> &&handler)
   {
-  public:
-    WebServer();
-    ~WebServer() = default;
-    void Setup(const WebServerSettings &settings);
-    void AddHandler(const std::string &pattern, std::unique_ptr<HTTPHandler> &&handler);
-    bool Start();
-    void Process();
-  protected:
-    std::vector<URLHandler> m_RequestHandlers;
-    std::unique_ptr<WebServerImpl> m_Impl;
-  };
+    this->Pattern.assign(pattern);
+    this->Handler = std::move(handler);
+  }
+};
+
+struct WebServerImpl;
+
+class WebServer
+{
+public:
+  WebServer();
+  ~WebServer() = default;
+  void Setup(const WebServerSettings &settings);
+  void AddHandler(const std::string &pattern, std::unique_ptr<HTTPHandler> &&handler);
+  bool Start();
+  void Process();
+protected:
+  std::vector<URLHandler> m_RequestHandlers;
+  std::unique_ptr<WebServerImpl> m_Impl;
+};
+
 }

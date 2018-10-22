@@ -26,6 +26,7 @@ missing
 *.lo
 .deps/
 .libs/
+.dirstamp
 
 #kmod
 *.cmd
