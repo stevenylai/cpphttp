@@ -44,6 +44,11 @@ Module.symvers
 *listen
 *.gz
 
+#ggtags
+GPATH
+GRTAGS
+GTAGS
+
 #Others
 build-android*.sh
 packages/*.cmake
@@ -52,3 +57,4 @@ compile
 *.cproject
 /.settings
 nbproject/
+

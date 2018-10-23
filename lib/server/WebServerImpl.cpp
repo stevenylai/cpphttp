@@ -131,9 +131,42 @@ callback_http(struct lws *wsi, enum lws_callback_reasons reason,
             {
               item.Handler->Delete(match, *(pss->request));
             }
+            break;
           }
         }
-        // Write response back
+        /*
+		 * prepare and write http headers... with regards to content-
+		 * length, there are three approaches:
+		 *
+		 *  - http/1.0 or connection:close: no need, but no pipelining
+		 *  - http/1.1 or connected:keep-alive
+		 *     (keep-alive is default for 1.1): content-length required
+		 *  - http/2: no need, LWS_WRITE_HTTP_FINAL closes the stream
+		 *
+		 * giving the api below LWS_ILLEGAL_HTTP_CONTENT_LEN instead of
+		 * a content length forces the connection response headers to
+		 * send back "connection: close", disabling keep-alive.
+		 *
+		 * If you know the final content-length, it's always OK to give
+		 * it and keep-alive can work then if otherwise possible.  But
+		 * often you don't know it and avoiding having to compute it
+		 * at header-time makes life easier at the server.
+		 */
+        uint8_t buf[LWS_PRE + 2048], *start = &buf[LWS_PRE], *p = start,
+          *end = &buf[sizeof(buf) - LWS_PRE - 1];
+        if (lws_add_http_common_headers(wsi, pss->request->m_ResponseStatus,
+                                        pss->request->m_ResponseContentType.c_str(),
+                                        pss->request->m_ResponseBody.length(), /* no content len */
+                                        &p, end))
+        {
+          return 1;
+        }
+		if (lws_finalize_write_http_header(wsi, start, &p, end))
+        {
+          return 1;
+        }
+        /* write the body separately */
+        lws_callback_on_writable(wsi);
       }
       break;
     }
