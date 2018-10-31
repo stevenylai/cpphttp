@@ -156,7 +156,7 @@ callback_http(struct lws *wsi, enum lws_callback_reasons reason,
           *end = &buf[sizeof(buf) - LWS_PRE - 1];
         if (lws_add_http_common_headers(wsi, pss->request->m_ResponseStatus,
                                         pss->request->m_ResponseContentType.c_str(),
-                                        pss->request->m_ResponseBody.length(), /* no content len */
+                                        pss->request->m_ResponseBody.length(),
                                         &p, end))
         {
           return 1;
@@ -170,10 +170,54 @@ callback_http(struct lws *wsi, enum lws_callback_reasons reason,
       }
       break;
     }
+    case LWS_CALLBACK_HTTP_WRITEABLE:
+    {
+      for (unsigned i = 0; i < LWS_PRE; ++i)
+      {
+        pss->request->_m_ResponseBodyRaw.emplace_back(' ');
+      }
+      unsigned i = 0;
+      while (pss->request->_m_ResponseProgress < pss->request->m_ResponseBody.size())
+      {
+        pss->request->_m_ResponseBodyRaw.emplace_back(pss->request->m_ResponseBody[pss->request->_m_ResponseProgress++]);
+        if (++i >= 2048)
+        {
+          break;
+        }
+      }
+      enum lws_write_protocol n = LWS_WRITE_HTTP;
+      if (pss->request->_m_ResponseProgress >= pss->request->m_ResponseBody.size())
+      {
+        n = LWS_WRITE_HTTP_FINAL;
+      }
+      if (lws_write(wsi, reinterpret_cast<uint8_t *>(&pss->request->_m_ResponseBodyRaw[LWS_PRE]), i, n) != i)
+      {
+        return 1;
+      }
+      /*
+       * HTTP/1.0 no keepalive: close network connection
+       * HTTP/1.1 or HTTP1.0 + KA: wait / process next transaction
+       * HTTP/2: stream ended, parent connection remains up
+       */
+      if (n == LWS_WRITE_HTTP_FINAL)
+      {
+        if (lws_http_transaction_completed(wsi))
+        {
+          return -1;
+        }
+      }
+      else
+      {
+        lws_callback_on_writable(wsi);
+      }
+      break;
+    }
     case LWS_CALLBACK_HTTP_DROP_PROTOCOL:
+    {
       delete pss->request;
       pss->request = nullptr;
       break;
+    }
     default:
       break;
   }
