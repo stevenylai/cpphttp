@@ -45,7 +45,7 @@ callback_minimal(struct lws *wsi, enum lws_callback_reasons reason,
       }
       case LWS_CALLBACK_PROTOCOL_DESTROY:
       {
-        // TODO
+        vhd->handler->m_Requests.clear();
         break;
       }
       case LWS_CALLBACK_ESTABLISHED:
@@ -78,7 +78,7 @@ callback_minimal(struct lws *wsi, enum lws_callback_reasons reason,
           int written = lws_write(wsi, reinterpret_cast<uint8_t *>(&buf[LWS_PRE]), i, LWS_WRITE_TEXT);
           if (written < 0)
           {
-            // TODO: log error
+            return 1;
           }
           else
           {
