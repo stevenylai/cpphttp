@@ -245,7 +245,6 @@ bool WebServerImpl::Start()
   m_ContextInfo.mounts = &m_Static;
   m_ContextInfo.user = this;
 
-  std::free(m_pContext);
   m_pContext = lws_create_context(&m_ContextInfo);
   if (!m_pContext)
   {
@@ -257,6 +256,15 @@ bool WebServerImpl::Start()
 void WebServerImpl::Process()
 {
   lws_service(m_pContext, 1000);
+}
+
+void WebServerImpl::Stop()
+{
+  if (m_pContext)
+  {
+    lws_context_destroy(m_pContext);
+    m_pContext = nullptr;
+  }
 }
 
 }

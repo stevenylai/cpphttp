@@ -1,6 +1,7 @@
 #pragma once
 #include <libwebsockets.h>
 #include "server/WebServer.h"
+#include "server/WebSocketHandler.h"
 
 namespace http {
 
@@ -19,6 +20,7 @@ public:
   void Setup(const WebServerSettings &settings);
   bool Start();
   void Process();
+  void Stop();
 
   WebServerSettings m_Settings;
   std::vector<URLHandler> &m_RequestHandlers;
@@ -26,6 +28,7 @@ public:
   struct lws_http_mount m_Static;
   struct lws_context_creation_info m_ContextInfo;
   struct lws_context *m_pContext = nullptr;
+  std::unordered_map<std::string, std::unique_ptr<WebSocketHandler>> m_WSHandlers;
 };
 
 }
