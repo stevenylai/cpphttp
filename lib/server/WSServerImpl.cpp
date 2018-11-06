@@ -21,8 +21,8 @@ struct per_vhost_data
 };
 
 static int
-callback_minimal(struct lws *wsi, enum lws_callback_reasons reason,
-                 void *user, void *in, size_t len)
+callback_ws(struct lws *wsi, enum lws_callback_reasons reason,
+            void *user, void *in, size_t len)
 {
   auto *server = reinterpret_cast<WebServerImpl *>(lws_context_user(lws_get_context(wsi)));
   struct per_session_data *pss = (struct per_session_data *)user;
@@ -111,6 +111,21 @@ callback_minimal(struct lws *wsi, enum lws_callback_reasons reason,
 	}
 
 	return 0;
+}
+
+void WebServerImpl::AddWebSocketProtocols()
+{
+  for (auto iter = m_WSHandlers.begin(); iter != m_WSHandlers.end(); ++iter)
+  {
+    m_Protocols.emplace_back();
+    m_Protocols.back().name = iter->first.c_str();
+    m_Protocols.back().callback = callback_ws;
+    m_Protocols.back().per_session_data_size = sizeof(struct per_session_data);
+    m_Protocols.back().rx_buffer_size = 128;
+    m_Protocols.back().id = 0;
+    m_Protocols.back().user = nullptr;
+    m_Protocols.back().tx_packet_size = 0;
+  }
 }
 
 }

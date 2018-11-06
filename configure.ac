@@ -19,6 +19,7 @@ AC_CONFIG_MACRO_DIR([m4])
 AM_INIT_AUTOMAKE([foreign subdir-objects])
 AM_SILENT_RULES([yes])
 
-AC_CONFIG_FILES(Makefile packages/Makefile lib/Makefile)
+AC_CONFIG_FILES(Makefile packages/Makefile lib/Makefile
+                test/Makefile test/demo/Makefile)
 #AC_CONFIG_FILES(m4_esyscmd(find src lib -name 'Makefile.am' | sed 's/Makefile\.am$/Makefile/g' | sed ':a;N;$!ba;s/\n/ /g'))
 AC_OUTPUT

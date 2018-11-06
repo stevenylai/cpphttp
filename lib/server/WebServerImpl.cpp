@@ -223,10 +223,6 @@ callback_http(struct lws *wsi, enum lws_callback_reasons reason,
   }
   return lws_callback_http_dummy(wsi, reason, user, in, len);
 }
-static struct lws_protocols protocols[] = {
-  { "http", callback_http, sizeof(void *), 0 },
-  { NULL, NULL, 0, 0 } /* terminator */
-};
 
 bool WebServerImpl::Start()
 {
@@ -239,16 +235,35 @@ bool WebServerImpl::Start()
     /* | LLL_DEBUG */;
   lws_set_log_level(logs, NULL);
 
+  m_Protocols.emplace_back();
+  m_Protocols.back().name = "http";
+  m_Protocols.back().callback = callback_http;
+  m_Protocols.back().per_session_data_size = sizeof(void *);
+  m_Protocols.back().rx_buffer_size = 0;
+
+  this->AddWebSocketProtocols();
+
+  m_Protocols.emplace_back();
+  m_Protocols.back().name = nullptr;
+  m_Protocols.back().callback = nullptr;
+  m_Protocols.back().per_session_data_size = 0;
+  m_Protocols.back().rx_buffer_size = 0;
+
   std::memset(&m_ContextInfo, 0, sizeof(m_ContextInfo));
   m_ContextInfo.port = m_Settings.Port;
-  m_ContextInfo.protocols = protocols;
+  m_ContextInfo.protocols = reinterpret_cast<struct lws_protocols *>(&m_Protocols[0]);
   m_ContextInfo.mounts = &m_Static;
   m_ContextInfo.user = this;
+  m_ContextInfo.ws_ping_pong_interval = 10;
 
   m_pContext = lws_create_context(&m_ContextInfo);
   if (!m_pContext)
   {
     return false;
+  }
+  if (m_Settings.Port == 0)
+  {
+    m_Settings.Port = lws_get_vhost_port(lws_create_vhost(m_pContext, &m_ContextInfo));
   }
   return true;
 
