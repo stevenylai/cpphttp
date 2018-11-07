@@ -176,7 +176,7 @@ callback_http(struct lws *wsi, enum lws_callback_reasons reason,
       {
         pss->request->_m_ResponseBodyRaw.emplace_back(' ');
       }
-      unsigned i = 0;
+      int i = 0;
       while (pss->request->_m_ResponseProgress < pss->request->m_ResponseBody.size())
       {
         pss->request->_m_ResponseBodyRaw.emplace_back(pss->request->m_ResponseBody[pss->request->_m_ResponseProgress++]);
@@ -226,7 +226,7 @@ callback_http(struct lws *wsi, enum lws_callback_reasons reason,
 
 bool WebServerImpl::Start()
 {
-  int n = 0, logs = LLL_USER | LLL_ERR | LLL_WARN | LLL_NOTICE
+  int logs = LLL_USER | LLL_ERR | LLL_WARN | LLL_NOTICE
     /* for LLL_ verbosity above NOTICE to be built into lws,
      * lws must have been configured and built with
      * -DCMAKE_BUILD_TYPE=DEBUG instead of =RELEASE */

@@ -7,9 +7,14 @@ WebServer::WebServer()
 {
   m_Impl = std::make_unique<WebServerImpl>(m_RequestHandlers);
 }
+WebServer::~WebServer() = default;
 void WebServer::Setup(const WebServerSettings &settings)
 {
   m_Impl->Setup(settings);
+}
+int WebServer::GetPort() const
+{
+  return m_Impl->m_Settings.Port;
 }
 bool WebServer::Start()
 {

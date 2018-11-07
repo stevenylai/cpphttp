@@ -29,7 +29,6 @@ callback_ws(struct lws *wsi, enum lws_callback_reasons reason,
   struct per_vhost_data *vhd =
     (struct per_vhost_data *) lws_protocol_vh_priv_get(lws_get_vhost(wsi),
                                                        lws_get_protocol(wsi));
-	int m;
 
 	switch (reason) {
       case LWS_CALLBACK_PROTOCOL_INIT:

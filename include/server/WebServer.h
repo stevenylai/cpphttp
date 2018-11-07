@@ -30,10 +30,11 @@ class WebServer
 {
 public:
   WebServer();
-  ~WebServer() = default;
+  ~WebServer();
   void Setup(const WebServerSettings &settings);
   void AddHandler(const std::string &pattern, std::unique_ptr<HTTPHandler> &&handler);
   bool Start();
+  int GetPort() const;
   void Process();
 protected:
   std::vector<URLHandler> m_RequestHandlers;
