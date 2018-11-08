@@ -4,7 +4,7 @@
 #include "server/WebServer.h"
 using namespace http;
 
-class SimpleHTTPHandler : public HTTPHandler
+class RestHandler : public HTTPHandler
 {
 public:
   void Get(std::smatch &match, HTTPRequest &request) override
@@ -21,9 +21,10 @@ int main()
 {
   WebServerSettings settings;
   settings.StaticFilePath = ROOT;
+  settings.Port = 3367;
   WebServer server;
   server.Setup(settings);
-  server.AddHandler("/backend/test", std::make_unique<SimpleHTTPHandler>());
+  server.AddHandler("/backend/test", std::make_unique<RestHandler>());
   server.Start();
   std::cout << "Starting server at port: " << server.GetPort() << std::endl;
   while (true)

@@ -93,11 +93,13 @@ callback_http(struct lws *wsi, enum lws_callback_reasons reason,
       break;
     }
     case LWS_CALLBACK_FILTER_PROTOCOL_CONNECTION:
+    {
       if (!pss->request->m_Validated || !pss->request->m_Method.length())
       {
         return -1;
       }
       break;
+    }
     case LWS_CALLBACK_HTTP_BODY:
     {
       pss->request->m_Handler = wsi;
@@ -221,7 +223,8 @@ callback_http(struct lws *wsi, enum lws_callback_reasons reason,
     default:
       break;
   }
-  return lws_callback_http_dummy(wsi, reason, user, in, len);
+  //int res = lws_callback_http_dummy(wsi, reason, user, in, len);
+  return 0;
 }
 
 bool WebServerImpl::Start()
@@ -238,7 +241,7 @@ bool WebServerImpl::Start()
   m_Protocols.emplace_back();
   m_Protocols.back().name = "http";
   m_Protocols.back().callback = callback_http;
-  m_Protocols.back().per_session_data_size = sizeof(void *);
+  m_Protocols.back().per_session_data_size = sizeof(struct pss);
   m_Protocols.back().rx_buffer_size = 0;
 
   this->AddWebSocketProtocols();
