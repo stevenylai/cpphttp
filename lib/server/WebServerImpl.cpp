@@ -9,7 +9,7 @@ void WebServerImpl::Setup(const WebServerSettings &settings)
   m_Settings = settings;
   m_Dynamic = {
     /* .mount_next */		NULL,		/* linked-list "next" */
-    /* .mountpoint */		m_Settings.StaticFilePath.c_str(), /* mountpoint URL */
+    /* .mountpoint */		m_Settings.DynamicURL.c_str(), /* mountpoint URL */
     /* .origin */			NULL,	/* protocol */
     /* .def */			NULL,
     /* .protocol */			"http",
@@ -103,12 +103,6 @@ callback_http(struct lws *wsi, enum lws_callback_reasons reason,
     }
     case LWS_CALLBACK_FILTER_PROTOCOL_CONNECTION:
     {
-      /*
-      if (!pss->request->m_Validated || !pss->request->m_Method.length())
-      {
-        return -1;
-      }
-      */
       break;
     }
     case LWS_CALLBACK_HTTP_BODY:
@@ -198,30 +192,24 @@ callback_http(struct lws *wsi, enum lws_callback_reasons reason,
         {
           pss->request->_m_ResponseBodyRaw.emplace_back(' ');
         }
-        int i = 0;
-        while (pss->request->_m_ResponseProgress < pss->request->m_ResponseBody.size())
+        unsigned i = 0;
+        for (; i < pss->request->m_ResponseBody.size() && i < 2048; ++i)
         {
-          pss->request->_m_ResponseBodyRaw.emplace_back(pss->request->m_ResponseBody[pss->request->_m_ResponseProgress++]);
-          if (++i >= 2048)
-          {
-            break;
-          }
+          pss->request->_m_ResponseBodyRaw.emplace_back(pss->request->m_ResponseBody[pss->request->_m_ResponseProgress + i]);
         }
         enum lws_write_protocol n = LWS_WRITE_HTTP;
-        if (pss->request->_m_ResponseProgress >= pss->request->m_ResponseBody.size())
+        if (pss->request->_m_ResponseProgress + i >= pss->request->m_ResponseBody.size())
         {
           n = LWS_WRITE_HTTP_FINAL;
         }
-        if (lws_write(wsi, reinterpret_cast<uint8_t *>(&pss->request->_m_ResponseBodyRaw[LWS_PRE]), i, n) != i)
-        {
-          return 1;
-        }
+        int written = lws_write(wsi, reinterpret_cast<uint8_t *>(&pss->request->_m_ResponseBodyRaw[LWS_PRE]), i, n);
+        pss->request->_m_ResponseProgress += written;
         /*
          * HTTP/1.0 no keepalive: close network connection
          * HTTP/1.1 or HTTP1.0 + KA: wait / process next transaction
          * HTTP/2: stream ended, parent connection remains up
          */
-        if (n == LWS_WRITE_HTTP_FINAL)
+        if (n == LWS_WRITE_HTTP_FINAL && pss->request->_m_ResponseProgress >= pss->request->m_ResponseBody.size())
         {
           if (lws_http_transaction_completed(wsi))
           {
