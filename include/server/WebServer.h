@@ -9,7 +9,7 @@ struct WebServerSettings
 {
   int Port = 0;
   std::string StaticFilePath;
-  std::string DefaultFile = "index.htm";
+  std::string DefaultFile = "index.html";
   std::string DynamicURL = "/backend";
 };
 

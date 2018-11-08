@@ -1,3 +1,4 @@
+#include <iostream>
 #include "server/WebServerImpl.h"
 #include "server/HTTPRequest.h"
 
@@ -87,144 +88,174 @@ callback_http(struct lws *wsi, enum lws_callback_reasons reason,
         std::smatch match;
         if (std::regex_search(pss->request->m_Path, match, item.Pattern))
         {
-          pss->request->m_Validated = item.Handler->Prepare(match, *(pss->request));
+          if ((pss->request->m_Validated = item.Handler->Prepare(match, *(pss->request))))
+          {
+            break;
+          }
         }
+      }
+      if (!pss->request->m_Validated)
+      {
+        delete pss->request;
+        pss->request = nullptr;
       }
       break;
     }
     case LWS_CALLBACK_FILTER_PROTOCOL_CONNECTION:
     {
+      /*
       if (!pss->request->m_Validated || !pss->request->m_Method.length())
       {
         return -1;
       }
+      */
       break;
     }
     case LWS_CALLBACK_HTTP_BODY:
     {
-      pss->request->m_Handler = wsi;
-      pss->request->m_Body << reinterpret_cast<const char *>(in);
+      if (pss && pss->request)
+      {
+        pss->request->m_Handler = wsi;
+        pss->request->m_Body << reinterpret_cast<const char *>(in);
+        return 0;
+      }
       break;
     }
     case LWS_CALLBACK_HTTP_BODY_COMPLETION:
     {
-      pss->request->m_Handler = wsi;
-      pss->request->m_Body << reinterpret_cast<const char *>(in);
-      if (pss->request->m_Method.length())
+      if (pss && pss->request)
       {
-        for (auto &item : server->m_RequestHandlers)
+        pss->request->m_Handler = wsi;
+        pss->request->m_Body << reinterpret_cast<const char *>(in);
+        if (pss->request->m_Method.length())
         {
-          std::smatch match;
-          if (std::regex_search(pss->request->m_Path, match, item.Pattern))
+          for (auto &item : server->m_RequestHandlers)
           {
-            if (pss->request->m_Method == "get")
+            std::smatch match;
+            if (std::regex_search(pss->request->m_Path, match, item.Pattern))
             {
-              item.Handler->Get(match, *(pss->request));
+              if (pss->request->m_Method == "get")
+              {
+                item.Handler->Get(match, *(pss->request));
+              }
+              else if (pss->request->m_Method == "put")
+              {
+                item.Handler->Put(match, *(pss->request));
+              }
+              else if (pss->request->m_Method == "post")
+              {
+                item.Handler->Post(match, *(pss->request));
+              }
+              else if (pss->request->m_Method == "delete")
+              {
+                item.Handler->Delete(match, *(pss->request));
+              }
+              break;
             }
-            else if (pss->request->m_Method == "put")
-            {
-              item.Handler->Put(match, *(pss->request));
-            }
-            else if (pss->request->m_Method == "post")
-            {
-              item.Handler->Post(match, *(pss->request));
-            }
-            else if (pss->request->m_Method == "delete")
-            {
-              item.Handler->Delete(match, *(pss->request));
-            }
-            break;
           }
+          /*
+           * prepare and write http headers... with regards to content-
+           * length, there are three approaches:
+           *
+           *  - http/1.0 or connection:close: no need, but no pipelining
+           *  - http/1.1 or connected:keep-alive
+           *     (keep-alive is default for 1.1): content-length required
+           *  - http/2: no need, LWS_WRITE_HTTP_FINAL closes the stream
+           *
+           * giving the api below LWS_ILLEGAL_HTTP_CONTENT_LEN instead of
+           * a content length forces the connection response headers to
+           * send back "connection: close", disabling keep-alive.
+           *
+           * If you know the final content-length, it's always OK to give
+           * it and keep-alive can work then if otherwise possible.  But
+           * often you don't know it and avoiding having to compute it
+           * at header-time makes life easier at the server.
+           */
+          uint8_t buf[LWS_PRE + 2048], *start = &buf[LWS_PRE], *p = start,
+            *end = &buf[sizeof(buf) - LWS_PRE - 1];
+          if (lws_add_http_common_headers(wsi, pss->request->m_ResponseStatus,
+                                          pss->request->m_ResponseContentType.c_str(),
+                                          pss->request->m_ResponseBody.length(),
+                                          &p, end))
+          {
+            return 1;
+          }
+          if (lws_finalize_write_http_header(wsi, start, &p, end))
+          {
+            return 1;
+          }
+          /* write the body separately */
+          lws_callback_on_writable(wsi);
         }
-        /*
-		 * prepare and write http headers... with regards to content-
-		 * length, there are three approaches:
-		 *
-		 *  - http/1.0 or connection:close: no need, but no pipelining
-		 *  - http/1.1 or connected:keep-alive
-		 *     (keep-alive is default for 1.1): content-length required
-		 *  - http/2: no need, LWS_WRITE_HTTP_FINAL closes the stream
-		 *
-		 * giving the api below LWS_ILLEGAL_HTTP_CONTENT_LEN instead of
-		 * a content length forces the connection response headers to
-		 * send back "connection: close", disabling keep-alive.
-		 *
-		 * If you know the final content-length, it's always OK to give
-		 * it and keep-alive can work then if otherwise possible.  But
-		 * often you don't know it and avoiding having to compute it
-		 * at header-time makes life easier at the server.
-		 */
-        uint8_t buf[LWS_PRE + 2048], *start = &buf[LWS_PRE], *p = start,
-          *end = &buf[sizeof(buf) - LWS_PRE - 1];
-        if (lws_add_http_common_headers(wsi, pss->request->m_ResponseStatus,
-                                        pss->request->m_ResponseContentType.c_str(),
-                                        pss->request->m_ResponseBody.length(),
-                                        &p, end))
-        {
-          return 1;
-        }
-		if (lws_finalize_write_http_header(wsi, start, &p, end))
-        {
-          return 1;
-        }
-        /* write the body separately */
-        lws_callback_on_writable(wsi);
       }
       break;
     }
     case LWS_CALLBACK_HTTP_WRITEABLE:
     {
-      for (unsigned i = 0; i < LWS_PRE; ++i)
+      if (pss && pss->request)
       {
-        pss->request->_m_ResponseBodyRaw.emplace_back(' ');
-      }
-      int i = 0;
-      while (pss->request->_m_ResponseProgress < pss->request->m_ResponseBody.size())
-      {
-        pss->request->_m_ResponseBodyRaw.emplace_back(pss->request->m_ResponseBody[pss->request->_m_ResponseProgress++]);
-        if (++i >= 2048)
+        for (unsigned i = 0; i < LWS_PRE; ++i)
         {
-          break;
+          pss->request->_m_ResponseBodyRaw.emplace_back(' ');
         }
-      }
-      enum lws_write_protocol n = LWS_WRITE_HTTP;
-      if (pss->request->_m_ResponseProgress >= pss->request->m_ResponseBody.size())
-      {
-        n = LWS_WRITE_HTTP_FINAL;
-      }
-      if (lws_write(wsi, reinterpret_cast<uint8_t *>(&pss->request->_m_ResponseBodyRaw[LWS_PRE]), i, n) != i)
-      {
-        return 1;
-      }
-      /*
-       * HTTP/1.0 no keepalive: close network connection
-       * HTTP/1.1 or HTTP1.0 + KA: wait / process next transaction
-       * HTTP/2: stream ended, parent connection remains up
-       */
-      if (n == LWS_WRITE_HTTP_FINAL)
-      {
-        if (lws_http_transaction_completed(wsi))
+        int i = 0;
+        while (pss->request->_m_ResponseProgress < pss->request->m_ResponseBody.size())
         {
-          return -1;
+          pss->request->_m_ResponseBodyRaw.emplace_back(pss->request->m_ResponseBody[pss->request->_m_ResponseProgress++]);
+          if (++i >= 2048)
+          {
+            break;
+          }
         }
-      }
-      else
-      {
-        lws_callback_on_writable(wsi);
+        enum lws_write_protocol n = LWS_WRITE_HTTP;
+        if (pss->request->_m_ResponseProgress >= pss->request->m_ResponseBody.size())
+        {
+          n = LWS_WRITE_HTTP_FINAL;
+        }
+        if (lws_write(wsi, reinterpret_cast<uint8_t *>(&pss->request->_m_ResponseBodyRaw[LWS_PRE]), i, n) != i)
+        {
+          return 1;
+        }
+        /*
+         * HTTP/1.0 no keepalive: close network connection
+         * HTTP/1.1 or HTTP1.0 + KA: wait / process next transaction
+         * HTTP/2: stream ended, parent connection remains up
+         */
+        if (n == LWS_WRITE_HTTP_FINAL)
+        {
+          if (lws_http_transaction_completed(wsi))
+          {
+            return -1;
+          }
+        }
+        else
+        {
+          lws_callback_on_writable(wsi);
+        }
       }
       break;
     }
     case LWS_CALLBACK_HTTP_DROP_PROTOCOL:
     {
-      delete pss->request;
-      pss->request = nullptr;
+
+      if (pss && pss->request)
+      {
+        delete pss->request;
+        pss->request = nullptr;
+      }
       break;
     }
     default:
       break;
   }
-  //int res = lws_callback_http_dummy(wsi, reason, user, in, len);
-  return 0;
+  if (pss && pss->request)
+  {
+    return 0;
+  }
+  else
+  {
+    return lws_callback_http_dummy(wsi, reason, user, in, len);
+  }
 }
 
 bool WebServerImpl::Start()

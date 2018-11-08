@@ -11,7 +11,7 @@ class HTTPRequest
 public:
   void *m_Handler = nullptr;
 
-  bool m_Validated = true;
+  bool m_Validated = false;
   std::string m_Path;
   std::string m_Method;
   std::stringstream m_Body;
