@@ -23,7 +23,7 @@ void WebServerImpl::Setup(const WebServerSettings &settings)
     /* .cache_revalidate */		0,
     /* .cache_intermediaries */	0,
     /* .origin_protocol */		LWSMPRO_CALLBACK, /* dynamic */
-    /* .mountpoint_len */		static_cast<unsigned char>(m_Settings.StaticFilePath.length()),		/* char count */
+    /* .mountpoint_len */		static_cast<unsigned char>(m_Settings.DynamicURL.length()),		/* char count */
     /* .basic_auth_login_file */	NULL,
   };
   m_Static = {
