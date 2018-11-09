@@ -7,14 +7,29 @@ using namespace http;
 class RestHandler : public HTTPHandler
 {
 public:
+  RestHandler(WebServer *server)
+    : m_Server(server)
+  {}
+  virtual ~RestHandler() = default;
+  void RespondAndForward(const std::string &notes, HTTPRequest &request)
+  {
+    std::string msg = notes + ": " + request.m_Body.str();
+    request.m_ResponseBody = "Sending " + msg + "\n";
+    auto &reqMap = m_Server->m_WSHandlers["lws-minimal"]->m_Requests;
+    for (auto iter = reqMap.begin(); iter != reqMap.end(); ++iter)
+    {
+      iter->second->SendMessage(msg);
+    }
+  }
   void Get(std::smatch &match, HTTPRequest &request) override
-  { request.m_ResponseBody = "GET: " + request.m_Body.str(); }
+  { this->RespondAndForward("GET", request); }
   void Put(std::smatch &match, HTTPRequest &request) override
-  { request.m_ResponseBody = "PUT: " + request.m_Body.str(); }
+  { this->RespondAndForward("PUT", request); }
   void Post(std::smatch &match, HTTPRequest &request) override
-  { request.m_ResponseBody = "POST: " + request.m_Body.str(); }
+  { this->RespondAndForward("POST", request); }
   void Delete(std::smatch &match, HTTPRequest &request) override
-  { request.m_ResponseBody = "DELETE: " + request.m_Body.str(); }
+  { this->RespondAndForward("DELETE", request); }
+  WebServer *m_Server = nullptr;
 };
 
 int main()
@@ -24,7 +39,8 @@ int main()
   settings.Port = 3367;
   WebServer server;
   server.Setup(settings);
-  server.AddHandler("/test", std::make_unique<RestHandler>());
+  server.AddHandler("/test", std::make_unique<RestHandler>(&server));
+  server.m_WSHandlers["lws-minimal"] = std::make_unique<WebSocketHandler>();
   server.Start();
   std::cout << "Starting server at port: " << server.GetPort() << std::endl;
   while (true)

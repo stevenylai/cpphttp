@@ -14,6 +14,7 @@ public:
   bool m_Validated = false;
   std::string m_Path;
   std::string m_Method;
+  int m_BodyLen = 0;
   std::stringstream m_Body;
 
   int m_ResponseStatus = 200;

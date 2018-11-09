@@ -5,7 +5,7 @@ namespace http {
 
 WebServer::WebServer()
 {
-  m_Impl = std::make_unique<WebServerImpl>(m_RequestHandlers);
+  m_Impl = std::make_unique<WebServerImpl>(m_RequestHandlers, m_WSHandlers);
 }
 WebServer::~WebServer() = default;
 void WebServer::Setup(const WebServerSettings &settings)

@@ -64,6 +64,11 @@ callback_http(struct lws *wsi, enum lws_callback_reasons reason,
     case LWS_CALLBACK_HTTP:
     {
       /* in contains the url part after our mountpoint /dyn, if any */
+      if (pss->request)
+      {
+        free(pss->request);
+        pss->request = nullptr;
+      }
       pss->request = new HTTPRequest();
       pss->request->m_Handler = wsi;
       pss->request->m_Path = reinterpret_cast<const char *>(in);
@@ -83,6 +88,20 @@ callback_http(struct lws *wsi, enum lws_callback_reasons reason,
       {
         pss->request->m_Method = "delete";
       }
+      int bodyLen = lws_hdr_total_length(wsi, WSI_TOKEN_HTTP_CONTENT_LENGTH);
+      if (bodyLen)
+      {
+        std::vector<char> buff(bodyLen + 1);
+        lws_hdr_copy(wsi, &(buff[0]), bodyLen + 1, WSI_TOKEN_HTTP_CONTENT_LENGTH);
+        try
+        {
+          pss->request->m_BodyLen = std::stoi(std::string(&(buff[0])));
+        }
+        catch (const std::invalid_argument &e)
+        {
+        }
+
+      }
       for (auto &item : server->m_RequestHandlers)
       {
         std::smatch match;
@@ -90,6 +109,10 @@ callback_http(struct lws *wsi, enum lws_callback_reasons reason,
         {
           if ((pss->request->m_Validated = item.Handler->Prepare(match, *(pss->request))))
           {
+            if (pss->request->m_BodyLen == 0)
+            {
+              server->InvokeREST(*(item.Handler), match, *(pss->request));
+            }
             break;
           }
         }
@@ -98,6 +121,10 @@ callback_http(struct lws *wsi, enum lws_callback_reasons reason,
       {
         delete pss->request;
         pss->request = nullptr;
+      }
+      else if (pss->request->m_BodyLen == 0)
+      {
+        return server->PrepareResponseHeader(wsi, *(pss->request));
       }
       break;
     }
@@ -110,7 +137,7 @@ callback_http(struct lws *wsi, enum lws_callback_reasons reason,
       if (pss && pss->request)
       {
         pss->request->m_Handler = wsi;
-        pss->request->m_Body << reinterpret_cast<const char *>(in);
+        pss->request->m_Body << std::string(reinterpret_cast<const char *>(in), len);
         return 0;
       }
       break;
@@ -120,7 +147,7 @@ callback_http(struct lws *wsi, enum lws_callback_reasons reason,
       if (pss && pss->request)
       {
         pss->request->m_Handler = wsi;
-        pss->request->m_Body << reinterpret_cast<const char *>(in);
+        pss->request->m_Body << std::string(reinterpret_cast<const char *>(in), len);
         if (pss->request->m_Method.length())
         {
           for (auto &item : server->m_RequestHandlers)
@@ -128,58 +155,11 @@ callback_http(struct lws *wsi, enum lws_callback_reasons reason,
             std::smatch match;
             if (std::regex_search(pss->request->m_Path, match, item.Pattern))
             {
-              if (pss->request->m_Method == "get")
-              {
-                item.Handler->Get(match, *(pss->request));
-              }
-              else if (pss->request->m_Method == "put")
-              {
-                item.Handler->Put(match, *(pss->request));
-              }
-              else if (pss->request->m_Method == "post")
-              {
-                item.Handler->Post(match, *(pss->request));
-              }
-              else if (pss->request->m_Method == "delete")
-              {
-                item.Handler->Delete(match, *(pss->request));
-              }
+              server->InvokeREST(*(item.Handler), match, *(pss->request));
               break;
             }
           }
-          /*
-           * prepare and write http headers... with regards to content-
-           * length, there are three approaches:
-           *
-           *  - http/1.0 or connection:close: no need, but no pipelining
-           *  - http/1.1 or connected:keep-alive
-           *     (keep-alive is default for 1.1): content-length required
-           *  - http/2: no need, LWS_WRITE_HTTP_FINAL closes the stream
-           *
-           * giving the api below LWS_ILLEGAL_HTTP_CONTENT_LEN instead of
-           * a content length forces the connection response headers to
-           * send back "connection: close", disabling keep-alive.
-           *
-           * If you know the final content-length, it's always OK to give
-           * it and keep-alive can work then if otherwise possible.  But
-           * often you don't know it and avoiding having to compute it
-           * at header-time makes life easier at the server.
-           */
-          uint8_t buf[LWS_PRE + 2048], *start = &buf[LWS_PRE], *p = start,
-            *end = &buf[sizeof(buf) - LWS_PRE - 1];
-          if (lws_add_http_common_headers(wsi, pss->request->m_ResponseStatus,
-                                          pss->request->m_ResponseContentType.c_str(),
-                                          pss->request->m_ResponseBody.length(),
-                                          &p, end))
-          {
-            return 1;
-          }
-          if (lws_finalize_write_http_header(wsi, start, &p, end))
-          {
-            return 1;
-          }
-          /* write the body separately */
-          lws_callback_on_writable(wsi);
+          return server->PrepareResponseHeader(wsi, *(pss->request));
         }
       }
       break;
@@ -188,12 +168,13 @@ callback_http(struct lws *wsi, enum lws_callback_reasons reason,
     {
       if (pss && pss->request)
       {
+        pss->request->_m_ResponseBodyRaw.clear();
         for (unsigned i = 0; i < LWS_PRE; ++i)
         {
           pss->request->_m_ResponseBodyRaw.emplace_back(' ');
         }
         unsigned i = 0;
-        for (; i < pss->request->m_ResponseBody.size() && i < 2048; ++i)
+        for (; pss->request->_m_ResponseProgress + i < pss->request->m_ResponseBody.size() && i < 2048; ++i)
         {
           pss->request->_m_ResponseBodyRaw.emplace_back(pss->request->m_ResponseBody[pss->request->_m_ResponseProgress + i]);
         }
@@ -244,6 +225,64 @@ callback_http(struct lws *wsi, enum lws_callback_reasons reason,
   {
     return lws_callback_http_dummy(wsi, reason, user, in, len);
   }
+}
+
+void WebServerImpl::InvokeREST(HTTPHandler &handler, std::smatch &match, HTTPRequest &req)
+{
+  if (req.m_Method == "get")
+  {
+    handler.Get(match, req);
+  }
+  else if (req.m_Method == "put")
+  {
+    handler.Put(match, req);
+  }
+  else if (req.m_Method == "post")
+  {
+    handler.Post(match, req);
+  }
+  else if (req.m_Method == "delete")
+  {
+    handler.Delete(match, req);
+  }
+}
+
+int WebServerImpl::PrepareResponseHeader(struct lws *wsi, HTTPRequest &req)
+{
+  /*
+   * prepare and write http headers... with regards to content-
+   * length, there are three approaches:
+   *
+   *  - http/1.0 or connection:close: no need, but no pipelining
+   *  - http/1.1 or connected:keep-alive
+   *     (keep-alive is default for 1.1): content-length required
+   *  - http/2: no need, LWS_WRITE_HTTP_FINAL closes the stream
+   *
+   * giving the api below LWS_ILLEGAL_HTTP_CONTENT_LEN instead of
+   * a content length forces the connection response headers to
+   * send back "connection: close", disabling keep-alive.
+   *
+   * If you know the final content-length, it's always OK to give
+   * it and keep-alive can work then if otherwise possible.  But
+   * often you don't know it and avoiding having to compute it
+   * at header-time makes life easier at the server.
+   */
+  uint8_t buf[LWS_PRE + 2048], *start = &buf[LWS_PRE], *p = start,
+    *end = &buf[sizeof(buf) - LWS_PRE - 1];
+  if (lws_add_http_common_headers(wsi, req.m_ResponseStatus,
+                                  req.m_ResponseContentType.c_str(),
+                                  req.m_ResponseBody.length(),
+                                  &p, end))
+  {
+    return 1;
+  }
+  if (lws_finalize_write_http_header(wsi, start, &p, end))
+  {
+    return 1;
+  }
+  /* write the body separately */
+  lws_callback_on_writable(wsi);
+  return 0;
 }
 
 bool WebServerImpl::Start()

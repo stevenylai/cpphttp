@@ -2,6 +2,7 @@
 #include <memory>
 #include <vector>
 #include "server/HTTPHandler.h"
+#include "server/WebSocketHandler.h"
 
 namespace http {
 
@@ -36,8 +37,9 @@ public:
   bool Start();
   int GetPort() const;
   void Process();
-protected:
+
   std::vector<URLHandler> m_RequestHandlers;
+  std::unordered_map<std::string, std::unique_ptr<WebSocketHandler>> m_WSHandlers;
   std::unique_ptr<WebServerImpl> m_Impl;
 };
 

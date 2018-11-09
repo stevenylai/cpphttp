@@ -8,6 +8,7 @@ namespace http {
 class HTTPHandler
 {
 public:
+  virtual ~HTTPHandler() = default;
   virtual bool Prepare(std::smatch &match, HTTPRequest &request)
   {
     return true;
